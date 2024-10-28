@@ -42,19 +42,37 @@ void checkShaderCompilation(GLuint shader, const char* shaderName) {
 	}
 }
 
-// Funkcja do sprawdzania błędów linkowania programu
-void checkProgramLinking(GLuint program) {
-	GLint success;
-	GLchar infoLog[512];
-	glGetProgramiv(program, GL_LINK_STATUS, &success);
-	if (!success) {
-		glGetProgramInfoLog(program, 512, NULL, infoLog);
-		std::cout << "Błąd linkowania programu: " << infoLog << std::endl;
+// Funkcja do generowania wierzchołków wielokąta
+void generatePolygonVerticles(GLfloat* vertices, int numVertices, float radius) {
+	for (int i = 0; i < numVertices; i++) {
+		float angle = 2.0f * 3.14159265358979323846 * i / numVertices;
+		vertices[i * 6] = radius * cos(angle);  // X
+		vertices[i * 6 + 1] = radius * sin(angle);  // Y
+		vertices[i * 6 + 2] = 0.0f;  // Z
+		// Kolory RGB
+		vertices[i * 6 + 3] = (float)rand() / RAND_MAX;  // R
+		vertices[i * 6 + 4] = (float)rand() / RAND_MAX;  // G
+		vertices[i * 6 + 5] = (float)rand() / RAND_MAX;  // B
 	}
+}
+
+// Funkcja do aktualizcji punktów
+GLfloat* update(GLfloat* vertices, int numVertices, GLuint vbo) {
+	delete[] vertices;
+	vertices = new GLfloat[numVertices * 6];
+
+	generatePolygonVerticles(vertices, numVertices, 1.0f);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * numVertices * 6, vertices, GL_DYNAMIC_DRAW);
+
+	return vertices;
 }
 
 int main()
 {
+	srand(time(NULL));
+
 	sf::ContextSettings settings;
 	settings.depthBits = 24;
 	settings.stencilBits = 8;
@@ -77,24 +95,17 @@ int main()
 	glGenBuffers(1, &vbo);
 
 	// Parametry wielokąta
-	const int numVertices = 6;
-	GLfloat vertices[6 * 6];
-	float radius = 0.5f;
+	int punkty_ = 3;
+	GLfloat* vertices = new GLfloat[punkty_ * 6];
 
 	// Generowanie współrzędnych w cylindrycznych
-	for (int i = 0; i < numVertices; ++i) {
-		float angle = 4.0f * 3.14 * i / numVertices;
-		vertices[i * 6] = radius * cos(angle);  // X
-		vertices[i * 6 + 1] = radius * sin(angle);  // Y
-		vertices[i * 6 + 2] = 0.0f;  // Z
-		// Kolory RGB
-		vertices[i * 6 + 3] = (i % 3 == 0) ? 1.0f : 0.0f;  // R
-		vertices[i * 6 + 4] = (i % 3 == 1) ? 1.0f : 0.0f;  // G
-		vertices[i * 6 + 5] = (i % 3 == 2) ? 1.0f : 0.0f;  // B
-	}
+	generatePolygonVerticles(vertices, punkty_, 1.0f);
 
+	// Domyślny typ prymitywu
+	GLenum primitiveType = GL_TRIANGLES
+		;
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * punkty_ * 6, vertices, GL_STATIC_DRAW);
 
 	// Utworzenie i skompilowanie shadera wierzchołków
 	GLuint vertexShader =
@@ -137,14 +148,77 @@ int main()
 			case sf::Event::Closed:
 				running = false;
 				break;
-			}
+			case sf::Event::KeyPressed:
+				switch (windowEvent.key.code) {
+				case sf::Keyboard::Num1:
+					primitiveType = GL_POINTS;
+					std::cout << "Zmieniono tryb na: " << "GL_POINTS" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num2:
+					primitiveType = GL_LINES;
+					std::cout << "Zmieniono tryb na: " << "GL_LINES" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num3:
+					primitiveType = GL_LINE_LOOP;
+					std::cout << "Zmieniono tryb na: " << "GL_LINE_LOOP" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num4:
+					primitiveType = GL_LINE_STRIP;
+					std::cout << "Zmieniono tryb na: " << "GL_LINE_STRIP" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num5:
+					primitiveType = GL_TRIANGLES;
+					std::cout << "Zmieniono tryb na: " << "GL_TRIANGLES" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num6:
+					primitiveType = GL_TRIANGLE_STRIP;
+					std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_STRIP" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num7:
+					primitiveType = GL_TRIANGLE_FAN;
+					std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_FAN" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num8:
+					primitiveType = GL_QUADS;
+					std::cout << "Zmieniono tryb na: " << "GL_QUADS" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num9:
+					primitiveType = GL_QUAD_STRIP;
+					std::cout << "Zmieniono tryb na: " << "GL_QUAD_STRIP" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				case sf::Keyboard::Num0:
+					primitiveType = GL_POLYGON;
+					std::cout << "Zmieniono tryb na: " << "GL_POLYGON" << std::endl;
+					vertices = update(vertices, punkty_, vbo);
+					break;
+				default:
+					break;
+				}
+			case sf::Event::MouseMoved:
+				int nowe_punkty_ = std::max(3, 3 + windowEvent.mouseMove.y / 20);
+				if (nowe_punkty_ == punkty_)
+					break;
+				punkty_ = nowe_punkty_;
+				vertices = update(vertices, punkty_, vbo);
+				std::cout << "Nowa liczba wierzcholkow: " << punkty_ << std::endl;
+				break;
+			}		
 		}
 		// Nadanie scenie koloru czarnego
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		// Narysowanie trójkąta na podstawie 3 wierzchołków
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glDrawArrays(primitiveType, 0, punkty_);
 		// Wymiana buforów tylni/przedni
 		window.display();
 	}
@@ -154,6 +228,8 @@ int main()
 	glDeleteShader(vertexShader);
 	glDeleteBuffers(1, &vbo);
 	glDeleteVertexArrays(1, &vao);
+
+	delete[] vertices;
 	// Zamknięcie okna renderingu
 	window.close();
 	return 0;
