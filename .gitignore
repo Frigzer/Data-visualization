@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/glew-2.2.0/*
+/SFML-2.6.0/*
+/glm/*
