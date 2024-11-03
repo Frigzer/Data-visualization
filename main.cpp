@@ -3,6 +3,10 @@
 #include <GL/glew.h>
 #include <SFML/Window.hpp>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <iostream>
 #include <cmath>
 
@@ -12,9 +16,12 @@ const GLchar* vertexSource = R"glsl(
 in vec3 position;
 in vec3 color;
 out vec3 Color;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 proj;
 void main(){
 	Color = color;
-	gl_Position = vec4(position, 1.0);
+	gl_Position = proj * view * model * vec4(position, 1.0);
 }
 )glsl";
 
@@ -49,7 +56,7 @@ void generatePolygonVerticles(GLfloat* vertices, int numVertices, float radius) 
 		vertices[i * 6] = radius * cos(angle);  // X
 		vertices[i * 6 + 1] = radius * sin(angle);  // Y
 		vertices[i * 6 + 2] = 0.0f;  // Z
-		// Kolory RGB
+
 		vertices[i * 6 + 3] = (float)rand() / RAND_MAX;  // R
 		vertices[i * 6 + 4] = (float)rand() / RAND_MAX;  // G
 		vertices[i * 6 + 5] = (float)rand() / RAND_MAX;  // B
@@ -61,12 +68,51 @@ GLfloat* update(GLfloat* vertices, int numVertices, GLuint vbo) {
 	delete[] vertices;
 	vertices = new GLfloat[numVertices * 6];
 
-	generatePolygonVerticles(vertices, numVertices, 1.0f);
+	generatePolygonVerticles(vertices, numVertices, 0.5f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * numVertices * 6, vertices, GL_DYNAMIC_DRAW);
 
 	return vertices;
+}
+
+// Funkcja do ustawienia prymitywu
+GLenum setPrimitive(sf::Event mouseEvent) {
+	switch (mouseEvent.key.code)
+	{
+	case sf::Keyboard::Num1:
+		std::cout << "Zmieniono tryb na: " << "GL_POINTS" << std::endl;
+		return GL_POINTS;
+	case sf::Keyboard::Num2:
+		std::cout << "Zmieniono tryb na: " << "GL_LINES" << std::endl;
+		return GL_LINES;
+	case sf::Keyboard::Num3:
+		std::cout << "Zmieniono tryb na: " << "GL_LINE_LOOP" << std::endl;
+		return GL_LINE_LOOP;
+	case sf::Keyboard::Num4:
+		std::cout << "Zmieniono tryb na: " << "GL_LINE_STRIP" << std::endl;
+		return GL_LINE_STRIP;
+	case sf::Keyboard::Num5:
+		std::cout << "Zmieniono tryb na: " << "GL_TRIANGLES" << std::endl;
+		return GL_TRIANGLES;
+	case sf::Keyboard::Num6:
+		std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_STRIP" << std::endl;
+		return GL_TRIANGLE_STRIP;
+	case sf::Keyboard::Num7:
+		std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_FAN" << std::endl;
+		return GL_TRIANGLE_FAN;
+	case sf::Keyboard::Num8:
+		std::cout << "Zmieniono tryb na: " << "GL_QUADS" << std::endl;
+		return GL_QUADS;
+	case sf::Keyboard::Num9:
+		std::cout << "Zmieniono tryb na: " << "GL_QUAD_STRIP" << std::endl;
+		return GL_QUAD_STRIP;
+	case sf::Keyboard::Num0:
+		std::cout << "Zmieniono tryb na: " << "GL_POLYGON" << std::endl;
+		return GL_POLYGON;
+	default:
+		break;
+	}
 }
 
 int main()
@@ -79,6 +125,10 @@ int main()
 
 	// Okno renderingu
 	sf::Window window(sf::VideoMode(800, 600, 32), "OpenGL", sf::Style::Titlebar | sf::Style::Close, settings);
+
+	// Włączenie z-bufora
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
 	// Inicjalizacja GLEW
 	glewExperimental = GL_TRUE;
@@ -95,15 +145,61 @@ int main()
 	glGenBuffers(1, &vbo);
 
 	// Parametry wielokąta
-	int punkty_ = 3;
-	GLfloat* vertices = new GLfloat[punkty_ * 6];
+	int punkty_ = 4;
+	// GLfloat* vertices = new GLfloat[punkty_ * 6];
 
-	// Generowanie współrzędnych w cylindrycznych
-	generatePolygonVerticles(vertices, punkty_, 1.0f);
+	// Generowanie współrzędnych cylindrycznych
+	// generatePolygonVerticles(vertices, punkty_, 0.5f);
+
+	// Generowanie sześcianu
+	punkty_ = 36;
+	GLfloat vertices[] = {
+	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+	0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
+	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f,
+	-0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+
+	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
+	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
+	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+
+	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f
+	};
 
 	// Domyślny typ prymitywu
-	GLenum primitiveType = GL_TRIANGLES
-		;
+	GLenum primitiveType = GL_TRIANGLES;
+
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * punkty_ * 6, vertices, GL_STATIC_DRAW);
 
@@ -131,6 +227,31 @@ int main()
 	glLinkProgram(shaderProgram);
 	glUseProgram(shaderProgram);
 
+	// Stworzenie macierzy modelu
+	glm::mat4 model = glm::mat4(1.0f);
+	model = glm::rotate(model, glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+	// Stworzenie macierzy widoku
+	glm::mat4 view;
+	view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f),
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f));
+
+	// Stworzenie macierzy projekcji
+	glm::mat4 proj = glm::perspective(glm::radians(45.0f), 800.0f / 800.0f, 0.06f, 100.0f);
+
+	// Wysłanie do shadera macierzy modelu
+	GLint uniTrans = glGetUniformLocation(shaderProgram, "model");
+	glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(model));
+
+	// Wysłanie do shadera macierzy widoku
+	GLint uniView = glGetUniformLocation(shaderProgram, "view");
+	glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
+
+	// Wysłanie do shadera macierzy projekcji
+	GLint uniProj = glGetUniformLocation(shaderProgram, "proj");
+	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
+
 	// Specifikacja formatu danych wierzchołkowych
 	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
 	glEnableVertexAttribArray(posAttrib);
@@ -141,7 +262,19 @@ int main()
 
 	// Rozpoczęcie pętli zdarzeń
 	bool running = true;
+
+	sf::Clock clock;
+
+	glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	float obrot = 0.0f;
+
 	while (running) {
+		float deltaTime = clock.restart().asSeconds();
+		float baseSpeed = 0.5f;  // Podstawowa prędkość kamery
+		float cameraSpeed = baseSpeed * deltaTime;
 		sf::Event windowEvent;
 		while (window.pollEvent(windowEvent)) {
 			switch (windowEvent.type) {
@@ -149,76 +282,72 @@ int main()
 				running = false;
 				break;
 			case sf::Event::KeyPressed:
-				switch (windowEvent.key.code) {
-				case sf::Keyboard::Num1:
-					primitiveType = GL_POINTS;
-					std::cout << "Zmieniono tryb na: " << "GL_POINTS" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num2:
-					primitiveType = GL_LINES;
-					std::cout << "Zmieniono tryb na: " << "GL_LINES" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num3:
-					primitiveType = GL_LINE_LOOP;
-					std::cout << "Zmieniono tryb na: " << "GL_LINE_LOOP" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num4:
-					primitiveType = GL_LINE_STRIP;
-					std::cout << "Zmieniono tryb na: " << "GL_LINE_STRIP" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num5:
-					primitiveType = GL_TRIANGLES;
-					std::cout << "Zmieniono tryb na: " << "GL_TRIANGLES" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num6:
-					primitiveType = GL_TRIANGLE_STRIP;
-					std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_STRIP" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num7:
-					primitiveType = GL_TRIANGLE_FAN;
-					std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_FAN" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num8:
-					primitiveType = GL_QUADS;
-					std::cout << "Zmieniono tryb na: " << "GL_QUADS" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num9:
-					primitiveType = GL_QUAD_STRIP;
-					std::cout << "Zmieniono tryb na: " << "GL_QUAD_STRIP" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				case sf::Keyboard::Num0:
-					primitiveType = GL_POLYGON;
-					std::cout << "Zmieniono tryb na: " << "GL_POLYGON" << std::endl;
-					vertices = update(vertices, punkty_, vbo);
-					break;
-				default:
-					break;
+				if (windowEvent.key.code == sf::Keyboard::Escape) {
+					running = false;
 				}
+				/*
+				if (windowEvent.key.code >= sf::Keyboard::Num0 && windowEvent.key.code <= sf::Keyboard::Num9)
+					primitiveType = setPrimitive(windowEvent);
+				break;
+			
 			case sf::Event::MouseMoved:
-				int nowe_punkty_ = std::max(3, 3 + windowEvent.mouseMove.y / 20);
+				int nowe_punkty_ = std::max(3, 3 + windowEvent.mouseMove.y / 50);
 				if (nowe_punkty_ == punkty_)
 					break;
 				punkty_ = nowe_punkty_;
 				vertices = update(vertices, punkty_, vbo);
 				std::cout << "Nowa liczba wierzcholkow: " << punkty_ << std::endl;
 				break;
-			}		
+				*/
+			}			
 		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+			cameraPos += cameraSpeed * cameraFront;
+			std::cout << "Ruch kamery: PRZOD\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+			cameraPos -= cameraSpeed * cameraFront;
+			std::cout << "Ruch kamery: TYL\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+			cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+			std::cout << "Ruch kamery: LEWO\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+			cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+			std::cout << "Ruch kamery: PRAWO\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+			cameraPos.y += cameraSpeed;
+			std::cout << "Ruch kamery: GORA\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
+			cameraPos.y -= cameraSpeed;
+			std::cout << "Ruch kamery: DOL\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
+			obrot -= cameraSpeed;
+			std::cout << "Obrot kamery: LEWO\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+			obrot += cameraSpeed;
+			std::cout << "Obrot kamery: PRAWO\n";
+		}
+		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+		cameraFront.x = sin(obrot);
+		cameraFront.z = -cos(obrot);
+			
+		GLint uniView = glGetUniformLocation(shaderProgram, "view");
+		glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
+
 		// Nadanie scenie koloru czarnego
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Narysowanie trójkąta na podstawie 3 wierzchołków
+		// Narysowanie wybranego prymitywu na podstawie wybranej liczby wierzchołków
 		glDrawArrays(primitiveType, 0, punkty_);
+
 		// Wymiana buforów tylni/przedni
 		window.display();
 	}
@@ -229,7 +358,9 @@ int main()
 	glDeleteBuffers(1, &vbo);
 	glDeleteVertexArrays(1, &vao);
 
-	delete[] vertices;
+	// Usunięcie dynamicznej tablicy
+	//delete[] vertices;
+
 	// Zamknięcie okna renderingu
 	window.close();
 	return 0;
