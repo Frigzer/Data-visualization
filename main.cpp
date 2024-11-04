@@ -270,6 +270,7 @@ int main()
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 	float obrot = 0.0f;
+	float obrotY = 0.0f;
 
 	while (running) {
 		float deltaTime = clock.restart().asSeconds();
@@ -325,18 +326,27 @@ int main()
 			cameraPos.y -= cameraSpeed;
 			std::cout << "Ruch kamery: DOL\n";
 		}
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
 			obrot -= cameraSpeed;
 			std::cout << "Obrot kamery: LEWO\n";
 		}
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
 			obrot += cameraSpeed;
 			std::cout << "Obrot kamery: PRAWO\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) {
+			obrotY += cameraSpeed;
+			std::cout << "Obrot kamery: GORA\n";
+		}
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) {
+			obrotY -= cameraSpeed;
+			std::cout << "Obrot kamery: DOL\n";
 		}
 		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 
 		cameraFront.x = sin(obrot);
 		cameraFront.z = -cos(obrot);
+		cameraFront.y = sin(obrotY);
 			
 		GLint uniView = glGetUniformLocation(shaderProgram, "view");
 		glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
