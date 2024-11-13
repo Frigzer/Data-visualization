@@ -2,6 +2,7 @@
 //#include "stdafx.h"
 #include <GL/glew.h>
 #include <SFML/Window.hpp>
+
 #include <SFML/System/Time.hpp>
 
 #include <glm/glm.hpp>
@@ -126,11 +127,12 @@ int main()
 	settings.stencilBits = 8;
 	
 	// Okno renderingu
-	sf::Window window(sf::VideoMode(800, 600, 32), "OpenGL", sf::Style::Titlebar | sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(800, 600, 32), "OpenGL | FPS: NULL", sf::Style::Titlebar | sf::Style::Close, settings);
 
 	// Przechwycenie kursora myszy i ukrycie go
 	window.setMouseCursorGrabbed(true); //przechwycenie kursora myszy w oknie 
 	window.setMouseCursorVisible(false); //ukrycie kursora myszy
+	
 
 	// Włączenie z-bufora
 	glEnable(GL_DEPTH_TEST);
@@ -273,42 +275,43 @@ int main()
 	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-	float obrot = 0.0f;
-
-	double lastX = window.getSize().x / 2, lastY = window.getSize().y / 2;
+	// Kąty podrzebne do kontroli nachylenia
 	double yaw = -90.0, pitch = 0.0;
+
+	// Czułość myszy
 	float sensitivity = 0.05f;
 
-	sf::Clock clock;
+	// Utworzenie obiektów Clock i Time
+	sf::Clock clock, clock2;
 	sf::Time time;
-	window.setFramerateLimit(60);
 
-	float update_interval = 0.2;   
-	float time_accumulator = 0; 
-	int frame_count = 0;
+	// Ustalenie stałej liczby klatek
+	window.setFramerateLimit(20);
+
+	// Zmienna do zliczania klatek
+	int frameCount = 0;
+
 	while (running) {
-		
-		//time = clock.getElapsedTime();
-		//clock.restart();
 
-		float deltaTime = clock.restart().asSeconds();
-		float cameraSpeed = 2.0f * deltaTime;
+		// Czas wykonania pętli
+		time = clock.getElapsedTime();
+		clock.restart();
 
-		time_accumulator += deltaTime;
-		frame_count++;
+		// Wyznaczenie szybkości poruszania kamery
+		float cameraSpeed = 0.000002f * time.asMicroseconds();
 
-		//int fps = static_cast<int>(1.0f / deltaTime);
-		//window.setTitle("OpenGL | FPS: " + std::to_string(fps));
-		if (time_accumulator >= update_interval)
+		// Licznik aktualnej liczby FPS
+		frameCount++;
+
+		// Aktualizacja wyświetlenia liczby FPS co sekundę
+		if (clock2.getElapsedTime().asSeconds() >= 1.0f)
 		{
-			// Get FPS from average time passed since last update
-			int fps = round(frame_count / time_accumulator);
-			window.setTitle("OpenGL | FPS: " + std::to_string(fps));
+			window.setTitle("OpenGL | FPS: " + std::to_string(frameCount));
 
-			time_accumulator = 0;
-			frame_count = 0;
+			frameCount = 0;
+			clock2.restart();
 		}
-
+		
 		sf::Event windowEvent;
 		while (window.pollEvent(windowEvent)) {
 			switch (windowEvent.type) {
@@ -326,14 +329,10 @@ int main()
 				*/
 			
 			case sf::Event::MouseMoved:
-
 				sf::Vector2i centerPosition(window.getSize().x / 2, window.getSize().y / 2);
 				sf::Vector2i localPosition = sf::Mouse::getPosition(window);
 				double xoffset = localPosition.x - centerPosition.x;
 				double yoffset = localPosition.y - centerPosition.y;
-
-				lastX = localPosition.x;
-				lastY = localPosition.y;
 
 				xoffset *= sensitivity;
 				yoffset *= sensitivity;
@@ -341,47 +340,46 @@ int main()
 				yaw += xoffset;
 				pitch -= yoffset;
 
-				
 				if (pitch > 89.0f)
 					pitch = 89.0f;
 				if (pitch < -89.0f)
 					pitch = -89.0f;
 				sf::Mouse::setPosition(centerPosition, window);
+
 				break;
-				
 			}			
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
 			cameraPos += cameraSpeed * cameraFront;
-			std::cout << "Ruch kamery: PRZOD\n";
+			//std::cout << "Ruch kamery: PRZOD\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
 			cameraPos -= cameraSpeed * cameraFront;
-			std::cout << "Ruch kamery: TYL\n";
+			//std::cout << "Ruch kamery: TYL\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
 			cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-			std::cout << "Ruch kamery: LEWO\n";
+			//std::cout << "Ruch kamery: LEWO\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
 			cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-			std::cout << "Ruch kamery: PRAWO\n";
+			//std::cout << "Ruch kamery: PRAWO\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
 			cameraPos.y += cameraSpeed;
-			std::cout << "Ruch kamery: GORA\n";
+			//std::cout << "Ruch kamery: GORA\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
 			cameraPos.y -= cameraSpeed;
-			std::cout << "Ruch kamery: DOL\n";
+			//std::cout << "Ruch kamery: DOL\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
 			yaw -= cameraSpeed * 30;
-			std::cout << "Obrot kamery: LEWO\n";
+			//std::cout << "Obrot kamery: LEWO\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
 			yaw += cameraSpeed * 30;
-			std::cout << "Obrot kamery: PRAWO\n";
+			//std::cout << "Obrot kamery: PRAWO\n";
 		}
 		
 		glm::vec3 front;
@@ -390,7 +388,6 @@ int main()
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		cameraFront = glm::normalize(front);
 		
-
 		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 			
 		GLint uniView = glGetUniformLocation(shaderProgram, "view");
