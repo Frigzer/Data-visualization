@@ -2,6 +2,7 @@
 //#include "stdafx.h"
 #include <GL/glew.h>
 #include <SFML/Window.hpp>
+#include <SFML/System/Time.hpp>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -115,6 +116,7 @@ GLenum setPrimitive(sf::Event mouseEvent) {
 	}
 }
 
+
 int main()
 {
 	srand(time(NULL));
@@ -122,9 +124,13 @@ int main()
 	sf::ContextSettings settings;
 	settings.depthBits = 24;
 	settings.stencilBits = 8;
-
+	
 	// Okno renderingu
 	sf::Window window(sf::VideoMode(800, 600, 32), "OpenGL", sf::Style::Titlebar | sf::Style::Close, settings);
+
+	// Przechwycenie kursora myszy i ukrycie go
+	window.setMouseCursorGrabbed(true); //przechwycenie kursora myszy w oknie 
+	window.setMouseCursorVisible(false); //ukrycie kursora myszy
 
 	// Włączenie z-bufora
 	glEnable(GL_DEPTH_TEST);
@@ -263,19 +269,46 @@ int main()
 	// Rozpoczęcie pętli zdarzeń
 	bool running = true;
 
-	sf::Clock clock;
-
 	glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 	float obrot = 0.0f;
-	float obrotY = 0.0f;
 
+	double lastX = window.getSize().x / 2, lastY = window.getSize().y / 2;
+	double yaw = -90.0, pitch = 0.0;
+	float sensitivity = 0.05f;
+
+	sf::Clock clock;
+	sf::Time time;
+	window.setFramerateLimit(60);
+
+	float update_interval = 0.2;   
+	float time_accumulator = 0; 
+	int frame_count = 0;
 	while (running) {
+		
+		//time = clock.getElapsedTime();
+		//clock.restart();
+
 		float deltaTime = clock.restart().asSeconds();
-		float baseSpeed = 0.5f;  // Podstawowa prędkość kamery
-		float cameraSpeed = baseSpeed * deltaTime;
+		float cameraSpeed = 2.0f * deltaTime;
+
+		time_accumulator += deltaTime;
+		frame_count++;
+
+		//int fps = static_cast<int>(1.0f / deltaTime);
+		//window.setTitle("OpenGL | FPS: " + std::to_string(fps));
+		if (time_accumulator >= update_interval)
+		{
+			// Get FPS from average time passed since last update
+			int fps = round(frame_count / time_accumulator);
+			window.setTitle("OpenGL | FPS: " + std::to_string(fps));
+
+			time_accumulator = 0;
+			frame_count = 0;
+		}
+
 		sf::Event windowEvent;
 		while (window.pollEvent(windowEvent)) {
 			switch (windowEvent.type) {
@@ -290,16 +323,32 @@ int main()
 				if (windowEvent.key.code >= sf::Keyboard::Num0 && windowEvent.key.code <= sf::Keyboard::Num9)
 					primitiveType = setPrimitive(windowEvent);
 				break;
+				*/
 			
 			case sf::Event::MouseMoved:
-				int nowe_punkty_ = std::max(3, 3 + windowEvent.mouseMove.y / 50);
-				if (nowe_punkty_ == punkty_)
-					break;
-				punkty_ = nowe_punkty_;
-				vertices = update(vertices, punkty_, vbo);
-				std::cout << "Nowa liczba wierzcholkow: " << punkty_ << std::endl;
+
+				sf::Vector2i centerPosition(window.getSize().x / 2, window.getSize().y / 2);
+				sf::Vector2i localPosition = sf::Mouse::getPosition(window);
+				double xoffset = localPosition.x - centerPosition.x;
+				double yoffset = localPosition.y - centerPosition.y;
+
+				lastX = localPosition.x;
+				lastY = localPosition.y;
+
+				xoffset *= sensitivity;
+				yoffset *= sensitivity;
+
+				yaw += xoffset;
+				pitch -= yoffset;
+
+				
+				if (pitch > 89.0f)
+					pitch = 89.0f;
+				if (pitch < -89.0f)
+					pitch = -89.0f;
+				sf::Mouse::setPosition(centerPosition, window);
 				break;
-				*/
+				
 			}			
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
@@ -327,26 +376,22 @@ int main()
 			std::cout << "Ruch kamery: DOL\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
-			obrot -= cameraSpeed;
+			yaw -= cameraSpeed * 30;
 			std::cout << "Obrot kamery: LEWO\n";
 		}
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
-			obrot += cameraSpeed;
+			yaw += cameraSpeed * 30;
 			std::cout << "Obrot kamery: PRAWO\n";
 		}
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) {
-			obrotY += cameraSpeed;
-			std::cout << "Obrot kamery: GORA\n";
-		}
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) {
-			obrotY -= cameraSpeed;
-			std::cout << "Obrot kamery: DOL\n";
-		}
-		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		
+		glm::vec3 front;
+		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+		front.y = sin(glm::radians(pitch));
+		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+		cameraFront = glm::normalize(front);
+		
 
-		cameraFront.x = sin(obrot);
-		cameraFront.z = -cos(obrot);
-		cameraFront.y = sin(obrotY);
+		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 			
 		GLint uniView = glGetUniformLocation(shaderProgram, "view");
 		glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
