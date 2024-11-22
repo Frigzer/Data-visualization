@@ -9,6 +9,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image/stb_image.h>
+
 #include <iostream>
 #include <cmath>
 
@@ -17,12 +20,14 @@ const GLchar* vertexSource = R"glsl(
 #version 150 core
 in vec3 position;
 in vec3 color;
-out vec3 Color;
+in vec2 aTexCoord;
+out vec3 Color;out vec2 TexCoord;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 proj;
 void main(){
 	Color = color;
+	TexCoord = aTexCoord;
 	gl_Position = proj * view * model * vec4(position, 1.0);
 }
 )glsl";
@@ -30,10 +35,12 @@ void main(){
 const GLchar* fragmentSource = R"glsl(
 #version 150 core
 in vec3 Color;
+in vec2 TexCoord;
 out vec4 outColor;
+uniform sampler2D texture1;
 void main()
 {
-	outColor = vec4(Color, 1.0);
+	outColor=texture(texture1, TexCoord);
 }
 )glsl";
 
@@ -73,7 +80,7 @@ GLfloat* update(GLfloat* vertices, int numVertices, GLuint vbo) {
 	generatePolygonVerticles(vertices, numVertices, 0.5f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * numVertices * 6, vertices, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * numVertices * 8, vertices, GL_DYNAMIC_DRAW);
 
 	return vertices;
 }
@@ -133,7 +140,6 @@ int main()
 	window.setMouseCursorGrabbed(true); //przechwycenie kursora myszy w oknie 
 	window.setMouseCursorVisible(false); //ukrycie kursora myszy
 	
-
 	// Włączenie z-bufora
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
@@ -162,54 +168,73 @@ int main()
 	// Generowanie sześcianu
 	punkty_ = 36;
 	GLfloat vertices[] = {
-	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
-	0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
-	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
 
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
-	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f,
-	-0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f,
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	-0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
 
-	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	-0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
-	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	-0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
 
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
-	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
 
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
-	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
 
-	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f,
-	-0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f,
-	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f
+	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+	-0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f
 	};
+
+	// Załadowanie tekstury
+	unsigned int texture1;
+	glGenTextures(1, &texture1);
+	glBindTexture(GL_TEXTURE_2D, texture1);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	int width, height, nrChannels;
+	stbi_set_flip_vertically_on_load(true);
+	unsigned char* data = stbi_load("textures//sigma.jpg", &width, &height, &nrChannels, 0);
+	if (data)
+	{
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}	else
+	{
+		std::cout << "Failed to load texture" << std::endl;
+	}
+	stbi_image_free(data);
 
 	// Domyślny typ prymitywu
 	GLenum primitiveType = GL_TRIANGLES;
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * punkty_ * 6, vertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * punkty_ * 8, vertices, GL_STATIC_DRAW);
 
 	// Utworzenie i skompilowanie shadera wierzchołków
 	GLuint vertexShader =
@@ -263,11 +288,14 @@ int main()
 	// Specifikacja formatu danych wierzchołkowych
 	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
 	glEnableVertexAttribArray(posAttrib);
-	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), 0);
+	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), 0);
 	GLint colAttrib = glGetAttribLocation(shaderProgram, "color");
 	glEnableVertexAttribArray(colAttrib);
-	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
 
+	// Wysłanie do shadera tekstury
+	GLint TexCoord = glGetAttribLocation(shaderProgram, "aTexCoord");
+	glEnableVertexAttribArray(TexCoord);	glVertexAttribPointer(TexCoord, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(6 *sizeof(GLfloat)));
 	// Rozpoczęcie pętli zdarzeń
 	bool running = true;
 
@@ -286,7 +314,7 @@ int main()
 	sf::Time time;
 
 	// Ustalenie stałej liczby klatek
-	window.setFramerateLimit(20);
+	window.setFramerateLimit(120);
 
 	// Zmienna do zliczania klatek
 	int frameCount = 0;
