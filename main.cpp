@@ -21,7 +21,10 @@ const GLchar* vertexSource = R"glsl(
 in vec3 position;
 in vec3 color;
 in vec2 aTexCoord;
+in vec3 aNormal;
 out vec3 Color;out vec2 TexCoord;
+out vec3 Normal;
+out vec3 FragPos;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 proj;
@@ -29,6 +32,8 @@ void main(){
 	Color = color;
 	TexCoord = aTexCoord;
 	gl_Position = proj * view * model * vec4(position, 1.0);
+	Normal = mat3(transpose(inverse(model))) * aNormal;
+	FragPos = vec3(model * vec4(position, 1.0));
 }
 )glsl";
 
@@ -36,11 +41,45 @@ const GLchar* fragmentSource = R"glsl(
 #version 150 core
 in vec3 Color;
 in vec2 TexCoord;
+in vec3 Normal;
+in vec3 FragPos;
 out vec4 outColor;
 uniform sampler2D texture1;
+
+uniform bool uLightingEnabled;  // Zmienna sterująca oświetleniem
+
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+
+uniform vec3 ambientLightColor;
+uniform float ambientStrength;
+uniform float lightIntensity;
+uniform vec3 difflightColor;
+
 void main()
 {
-	outColor=texture(texture1, TexCoord);
+	// Oświetlenie ambientowe
+    // float ambientStrength = 0.1f;
+    vec3 ambientLightColor = vec3(1.0, 1.0, 1.0);
+    vec4 ambient = ambientStrength * vec4(ambientLightColor, 1.0);
+
+	// Oświetlenie rozproszone
+    vec3 difflightColor = vec3(1.0, 1.0, 1.0);
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * difflightColor * lightIntensity;
+
+    if (uLightingEnabled)
+    {
+
+        outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);
+		
+    }
+    else
+    {
+        outColor = texture(texture1, TexCoord);
+    }
 }
 )glsl";
 
@@ -168,47 +207,59 @@ int main()
 	// Generowanie sześcianu
 	punkty_ = 36;
 	GLfloat vertices[] = {
-	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-	0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+		// Front
+		// x, y, z              nx, ny, nz          u,v             
+		-0.5f, -0.5f, -0.5f,    0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
+		0.5f, -0.5f, -0.5f,     0.0f, 0.0f, -1.0f,  1.0f, 0.0f,
+		0.5f, 0.5f, -0.5f,      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
+		0.5f, 0.5f, -0.5f,      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
+		-0.5f, 0.5f, -0.5f,     0.0f, 0.0f, -1.0f,  0.0f, 1.0f,
+		-0.5f, -0.5f, -0.5f,    0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
 
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	-0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+		// Rear
+		// x, y, z              nx, ny, nz          u,v             
+		-0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
+		0.5f, -0.5f, 0.5f,      0.0f, 0.0f, 1.0f,   1.0f, 0.0f,
+		0.5f, 0.5f, 0.5f,       0.0f, 0.0f, 1.0f,   1.0f, 1.0f,
+		0.5f, 0.5f, 0.5f,       0.0f, 0.0f, 1.0f,   1.0f, 1.0f,
+		-0.5f, 0.5f, 0.5f,      0.0f, 0.0f, 1.0f,   0.0f, 1.0f,
+		-0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
 
-	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	-0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-	-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		// Left
+		// x, y, z              nx, ny, nz          u,v             
+		-0.5f, 0.5f, 0.5f,      -1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
+		-0.5f, 0.5f, -0.5f,     -1.0f, 0.0f, 0.0f,   1.0f, 0.0f,
+		-0.5f, -0.5f, -0.5f,    -1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
+		-0.5f, -0.5f, -0.5f,    -1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
+		-0.5f, -0.5f, 0.5f,     -1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
+		-0.5f, 0.5f, 0.5f,      -1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
 
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		// Right
+		// x, y, z              nx, ny, nz          u,v             
+		0.5f, 0.5f, 0.5f,       1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
+		0.5f, 0.5f, -0.5f,      1.0f, 0.0f, 0.0f,   1.0f, 0.0f,
+		0.5f, -0.5f, -0.5f,     1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
+		0.5f, -0.5f, -0.5f,     1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
+		0.5f, -0.5f, 0.5f,      1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
+		0.5f, 0.5f, 0.5f,       1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
 
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-	-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		// Bottom
+		// x, y, z              nx, ny, nz          u,v             
+		-0.5f, -0.5f, -0.5f,    0.0f, -1.0f, 0.0f,   0.0f, 0.0f,
+		 0.5f, -0.5f, -0.5f,    0.0f, -1.0f, 0.0f,   1.0f, 0.0f,
+		 0.5f, -0.5f,  0.5f,    0.0f, -1.0f, 0.0f,   1.0f, 1.0f,
+		 0.5f, -0.5f,  0.5f,    0.0f, -1.0f, 0.0f,   1.0f, 1.0f,
+		-0.5f, -0.5f,  0.5f,    0.0f, -1.0f, 0.0f,   0.0f, 1.0f,
+		-0.5f, -0.5f, -0.5f,    0.0f, -1.0f, 0.0f,   0.0f, 0.0f,
 
-	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-	0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-	-0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-	-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f
+		// Top
+		// x, y, z              nx, ny, nz          u,v             
+		-0.5f, 0.5f, -0.5f,     0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+		0.5f, 0.5f, -0.5f,      0.0f, 1.0f, 0.0f,  1.0f, 0.0f,
+		0.5f, 0.5f, 0.5f,       0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
+		0.5f, 0.5f, 0.5f,       0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
+		-0.5f, 0.5f, 0.5f,      0.0f, 1.0f, 0.0f,  0.0f, 1.0f,
+		-0.5f, 0.5f, -0.5f,     0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
 	};
 
 	// Załadowanie tekstury
@@ -219,7 +270,7 @@ int main()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	int width, height, nrChannels;
 	stbi_set_flip_vertically_on_load(true);
-	unsigned char* data = stbi_load("textures//haisenberg.jpg", &width, &height, &nrChannels, 0);
+	unsigned char* data = stbi_load("textures//jesse.jpg", &width, &height, &nrChannels, 0);
 	if (data)
 	{
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
@@ -295,7 +346,28 @@ int main()
 
 	// Wysłanie do shadera tekstury
 	GLint TexCoord = glGetAttribLocation(shaderProgram, "aTexCoord");
-	glEnableVertexAttribArray(TexCoord);	glVertexAttribPointer(TexCoord, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(6 *sizeof(GLfloat)));
+	glEnableVertexAttribArray(TexCoord);	glVertexAttribPointer(TexCoord, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(6 *sizeof(GLfloat)));
+
+	GLint NorAttrib = glGetAttribLocation(shaderProgram, "aNormal");
+	glEnableVertexAttribArray(NorAttrib);
+	glVertexAttribPointer(NorAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+
+	glm::vec3 lightPos(1.2f, 1.5f, 2.0f);
+	GLint uniLightPos = glGetUniformLocation(shaderProgram, "lightPos");
+	glUniform3fv(uniLightPos, 1, &lightPos[0]);	bool lightingEnabled = true;  // Stan włączenia oświetlenia
+	float ambientStrength = 0.1f;
+	float lightIntensity = 1.0f;
+	bool changingAmbient = false;
+
+	GLint lightingEnabledLocation = glGetUniformLocation(shaderProgram, "uLightingEnabled");
+	GLint ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
+	GLint lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
+
+	glUniform1i(lightingEnabledLocation, lightingEnabled);
+	glUniform1f(ambientStrengthLocation, ambientStrength);
+	glUniform1f(lightIntensityLocation, lightIntensity);
+	
+
 	// Rozpoczęcie pętli zdarzeń
 	bool running = true;
 
@@ -355,6 +427,56 @@ int main()
 					primitiveType = setPrimitive(windowEvent);
 				break;
 				*/
+				// Obsługa klawiszy 1-3 do zmiany oświetlenia
+				if (windowEvent.key.code == sf::Keyboard::Num1) {
+					std::cout << "Oświetlenie: brak\n";
+					lightingEnabled = false;  // Wyłączamy pełne oświetlenie, włączamy tylko ambient
+				}
+				if (windowEvent.key.code == sf::Keyboard::Num2) {
+					std::cout << "Oświetlenie: punktowe\n";
+					lightingEnabled = true;   // Włączamy pełne oświetlenie
+				}
+				if (windowEvent.key.code == sf::Keyboard::Num3) {
+					if (changingAmbient) {
+						ambientStrength += 0.1f;
+						std::cout << "Zwiekszenie swiatla otoczenia: " << ambientStrength << "\n";
+						glUniform1f(ambientStrengthLocation, ambientStrength);
+					}
+					else {
+						lightIntensity += 0.1f;
+						std::cout << "Zwiekszenie swiatla punktowego: " << lightIntensity << std::endl;
+						glUniform1f(lightIntensityLocation, lightIntensity);
+					}
+
+				}
+				if (windowEvent.key.code == sf::Keyboard::Num4) {
+					if (changingAmbient) {
+						ambientStrength -= 0.1f;
+						if (ambientStrength < 0.0f) ambientStrength = 0.0f;  // Minimalna wartość
+						std::cout << "Zmniejszenie swiatla otoczenia " << ambientStrength << "\n";
+						glUniform1f(ambientStrengthLocation, ambientStrength);
+					}
+					else {
+						lightIntensity -= 0.1f;
+						if (lightIntensity < 0.0f) lightIntensity = 0.0f;  // Minimalna wartość
+						std::cout << "Zmniejszenie swiatla punktowego: " << lightIntensity << std::endl;
+						glUniform1f(lightIntensityLocation, lightIntensity);
+					}
+				}
+				if (windowEvent.key.code == sf::Keyboard::Num5) {
+					lightPos = cameraPos;  // Ustawienie źródła światła na pozycję kamery
+					uniLightPos = glGetUniformLocation(shaderProgram, "lightPos");
+					glUniform3fv(uniLightPos, 1, &lightPos[0]);  // Wyślij do shaderów
+					std::cout << "Ustawiono nowa pozycje zrodla swiatla\n";
+				}
+				if (windowEvent.key.code == sf::Keyboard::Num6) {
+					changingAmbient = !changingAmbient;
+					if (changingAmbient)
+						std::cout << "Ustawiono tryb: zmiana swiatla otoczenia\n";
+					else
+						std::cout << "Ustawiono tryb: zmiana swiatla punktowego\n";
+				}
+				break;
 			
 			case sf::Event::MouseMoved:
 				sf::Vector2i centerPosition(window.getSize().x / 2, window.getSize().y / 2);
@@ -409,6 +531,7 @@ int main()
 			yaw += cameraSpeed * 30;
 			//std::cout << "Obrot kamery: PRAWO\n";
 		}
+
 		
 		glm::vec3 front;
 		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -427,6 +550,9 @@ int main()
 
 		// Narysowanie wybranego prymitywu na podstawie wybranej liczby wierzchołków
 		glDrawArrays(primitiveType, 0, punkty_);
+
+		
+		glUniform1i(lightingEnabledLocation, lightingEnabled);
 
 		// Wymiana buforów tylni/przedni
 		window.display();
