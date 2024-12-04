@@ -58,8 +58,7 @@ uniform vec3 difflightColor;
 
 void main()
 {
-	// Oświetlenie ambientowe
-    // float ambientStrength = 0.1f;
+	// Oświetlenie otoczenia
     vec3 ambientLightColor = vec3(1.0, 1.0, 1.0);
     vec4 ambient = ambientStrength * vec4(ambientLightColor, 1.0);
 
@@ -72,9 +71,7 @@ void main()
 
     if (uLightingEnabled)
     {
-
-        outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);
-		
+        outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);	
     }
     else
     {
@@ -348,10 +345,12 @@ int main()
 	GLint TexCoord = glGetAttribLocation(shaderProgram, "aTexCoord");
 	glEnableVertexAttribArray(TexCoord);	glVertexAttribPointer(TexCoord, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(6 *sizeof(GLfloat)));
 
+	// Wysłanie do shadera wektorów normalnych
 	GLint NorAttrib = glGetAttribLocation(shaderProgram, "aNormal");
 	glEnableVertexAttribArray(NorAttrib);
 	glVertexAttribPointer(NorAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
 
+	// Wysłanie do shadera pozycji źródła światła
 	glm::vec3 lightPos(1.2f, 1.5f, 2.0f);
 	GLint uniLightPos = glGetUniformLocation(shaderProgram, "lightPos");
 	glUniform3fv(uniLightPos, 1, &lightPos[0]);	bool lightingEnabled = true;  // Stan włączenia oświetlenia
@@ -359,6 +358,7 @@ int main()
 	float lightIntensity = 1.0f;
 	bool changingAmbient = false;
 
+	// Wysłanie do shadera zmiennych odpowiedzialnych za oświetlenie
 	GLint lightingEnabledLocation = glGetUniformLocation(shaderProgram, "uLightingEnabled");
 	GLint ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
 	GLint lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
@@ -427,7 +427,7 @@ int main()
 					primitiveType = setPrimitive(windowEvent);
 				break;
 				*/
-				// Obsługa klawiszy 1-3 do zmiany oświetlenia
+				// Obsługa klawiszy 1-6 do zmiany oświetlenia
 				if (windowEvent.key.code == sf::Keyboard::Num1) {
 					std::cout << "Oświetlenie: brak\n";
 					lightingEnabled = false;  // Wyłączamy pełne oświetlenie, włączamy tylko ambient
