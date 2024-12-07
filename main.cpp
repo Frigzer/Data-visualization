@@ -14,6 +14,10 @@
 
 #include <iostream>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
 
 // Kody shaderów
 const GLchar* vertexSource = R"glsl(
@@ -56,8 +60,11 @@ uniform float ambientStrength;
 uniform float lightIntensity;
 uniform vec3 difflightColor;
 
+uniform vec3 objectColor;
+
 void main()
 {
+	
 	// Oświetlenie otoczenia
     vec3 ambientLightColor = vec3(1.0, 1.0, 1.0);
     vec4 ambient = ambientStrength * vec4(ambientLightColor, 1.0);
@@ -71,12 +78,17 @@ void main()
 
     if (uLightingEnabled)
     {
-        outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);	
+        // outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);	
+		outColor = (ambient + vec4(diffuse, 1.0)) * vec4(objectColor, 1.0);	
     }
     else
     {
-        outColor = texture(texture1, TexCoord);
+        // outColor = texture(texture1, TexCoord);
+		outColor = vec4(objectColor, 1.0);
     }
+	
+	
+	//outColor = vec4(objectColor, 1.0); // Ustaw kolor z uniformu
 }
 )glsl";
 
@@ -160,6 +172,115 @@ GLenum setPrimitive(sf::Event mouseEvent) {
 	}
 }
 
+// Funkcja do ładowania tekstury
+unsigned int loadTexture(const std::string& texturePath) {
+	unsigned int textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	// Ustawienie parametrów tekstury
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Wczytanie tekstury za pomocą stb_image
+	int width, height, nrChannels;
+	stbi_set_flip_vertically_on_load(true);
+	unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
+	
+	if (data) {
+		// Elastyczne podejście zakłada wariant dla nrChannels != 3
+		GLenum format;
+		if (nrChannels == 1)
+			format = GL_RED;
+		else if (nrChannels == 3)
+			format = GL_RGB;
+		else if (nrChannels == 4)
+			format = GL_RGBA;
+
+		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}	else
+	{
+		std::cout << "Failed to load texture" << std::endl;
+
+		stbi_image_free(data);
+
+		return 0;
+	}
+	stbi_image_free(data);
+
+	return textureID;
+}
+
+void setModelColor(GLuint shaderProgram, float r, float g, float b) {
+	// Znajdź lokalizację uniformu w shaderze
+	GLint colorLocation = glGetUniformLocation(shaderProgram, "objectColor");
+	if (colorLocation == -1) {
+		std::cerr << "Failed to find uniform 'objectColor' in shader program." << std::endl;
+		return;
+	}
+	// Ustaw kolor (RGB)
+	glUniform3f(colorLocation, r, g, b);
+}
+
+
+// Struktura wierzchołków figury
+struct Vertex {
+	glm::vec3 position;
+	glm::vec3 normal;
+	glm::vec2 texCoord;
+};
+
+// Funkcja do ładowania modelu z pliku obj
+bool loadOBJ(const std::string& path, std::vector<Vertex>& vertices, std::vector<unsigned int>& indices) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		std::cerr << "Failed to open OBJ file: " << path << std::endl;
+		return false;
+	}
+
+	std::vector<glm::vec3> temp_positions;
+	std::vector<glm::vec3> temp_normals;
+	std::vector<glm::vec2> temp_texCoords;
+
+	std::string line;
+	while (std::getline(file, line)) {
+		std::istringstream ss(line);
+		std::string prefix;
+		ss >> prefix;
+
+		if (prefix == "v") { // Wierzchołek
+			glm::vec3 pos;
+			ss >> pos.x >> pos.y >> pos.z;
+			temp_positions.push_back(pos);
+		}
+		else if (prefix == "vn") { // Normalne
+			glm::vec3 normal;
+			ss >> normal.x >> normal.y >> normal.z;
+			temp_normals.push_back(normal);
+		}
+		else if (prefix == "vt") { // Tekstura
+			glm::vec2 tex;
+			ss >> tex.x >> tex.y;
+			temp_texCoords.push_back(tex);
+		}
+		else if (prefix == "f") { // Ściany
+			unsigned int posIdx[3], texIdx[3], normIdx[3];
+			char slash; // do obsługi np. 1/2/3
+			for (int i = 0; i < 3; i++) {
+				ss >> posIdx[i] >> slash >> texIdx[i] >> slash >> normIdx[i];
+				Vertex vertex;
+				vertex.position = temp_positions[posIdx[i] - 1];
+				vertex.texCoord = temp_texCoords[texIdx[i] - 1];
+				vertex.normal = temp_normals[normIdx[i] - 1];
+				vertices.push_back(vertex);
+				indices.push_back(vertices.size() - 1);
+			}
+		}
+	}
+	file.close();
+	return true;
+}
 
 int main()
 {
@@ -184,105 +305,21 @@ int main()
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	// Utworzenie VAO (Vertex Array Object)
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-
-	// Utworzenie VBO (Vertex Buffer Object)
-	// i skopiowanie do niego danych wierzchołkowych
-	GLuint vbo;
-	glGenBuffers(1, &vbo);
-
-	// Parametry wielokąta
-	int punkty_ = 4;
-	// GLfloat* vertices = new GLfloat[punkty_ * 6];
-
-	// Generowanie współrzędnych cylindrycznych
-	// generatePolygonVerticles(vertices, punkty_, 0.5f);
-
-	// Generowanie sześcianu
-	punkty_ = 36;
-	GLfloat vertices[] = {
-		// Front
-		// x, y, z              nx, ny, nz          u,v             
-		-0.5f, -0.5f, -0.5f,    0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
-		0.5f, -0.5f, -0.5f,     0.0f, 0.0f, -1.0f,  1.0f, 0.0f,
-		0.5f, 0.5f, -0.5f,      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
-		0.5f, 0.5f, -0.5f,      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
-		-0.5f, 0.5f, -0.5f,     0.0f, 0.0f, -1.0f,  0.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f,    0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
-
-		// Rear
-		// x, y, z              nx, ny, nz          u,v             
-		-0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
-		0.5f, -0.5f, 0.5f,      0.0f, 0.0f, 1.0f,   1.0f, 0.0f,
-		0.5f, 0.5f, 0.5f,       0.0f, 0.0f, 1.0f,   1.0f, 1.0f,
-		0.5f, 0.5f, 0.5f,       0.0f, 0.0f, 1.0f,   1.0f, 1.0f,
-		-0.5f, 0.5f, 0.5f,      0.0f, 0.0f, 1.0f,   0.0f, 1.0f,
-		-0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f,   0.0f, 0.0f,
-
-		// Left
-		// x, y, z              nx, ny, nz          u,v             
-		-0.5f, 0.5f, 0.5f,      -1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-		-0.5f, 0.5f, -0.5f,     -1.0f, 0.0f, 0.0f,   1.0f, 0.0f,
-		-0.5f, -0.5f, -0.5f,    -1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f,    -1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
-		-0.5f, -0.5f, 0.5f,     -1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
-		-0.5f, 0.5f, 0.5f,      -1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-
-		// Right
-		// x, y, z              nx, ny, nz          u,v             
-		0.5f, 0.5f, 0.5f,       1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-		0.5f, 0.5f, -0.5f,      1.0f, 0.0f, 0.0f,   1.0f, 0.0f,
-		0.5f, -0.5f, -0.5f,     1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
-		0.5f, -0.5f, -0.5f,     1.0f, 0.0f, 0.0f,   1.0f, 1.0f,
-		0.5f, -0.5f, 0.5f,      1.0f, 0.0f, 0.0f,   0.0f, 1.0f,
-		0.5f, 0.5f, 0.5f,       1.0f, 0.0f, 0.0f,   0.0f, 0.0f,
-
-		// Bottom
-		// x, y, z              nx, ny, nz          u,v             
-		-0.5f, -0.5f, -0.5f,    0.0f, -1.0f, 0.0f,   0.0f, 0.0f,
-		 0.5f, -0.5f, -0.5f,    0.0f, -1.0f, 0.0f,   1.0f, 0.0f,
-		 0.5f, -0.5f,  0.5f,    0.0f, -1.0f, 0.0f,   1.0f, 1.0f,
-		 0.5f, -0.5f,  0.5f,    0.0f, -1.0f, 0.0f,   1.0f, 1.0f,
-		-0.5f, -0.5f,  0.5f,    0.0f, -1.0f, 0.0f,   0.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f,    0.0f, -1.0f, 0.0f,   0.0f, 0.0f,
-
-		// Top
-		// x, y, z              nx, ny, nz          u,v             
-		-0.5f, 0.5f, -0.5f,     0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-		0.5f, 0.5f, -0.5f,      0.0f, 1.0f, 0.0f,  1.0f, 0.0f,
-		0.5f, 0.5f, 0.5f,       0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
-		0.5f, 0.5f, 0.5f,       0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
-		-0.5f, 0.5f, 0.5f,      0.0f, 1.0f, 0.0f,  0.0f, 1.0f,
-		-0.5f, 0.5f, -0.5f,     0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-	};
-
-	// Załadowanie tekstury
-	unsigned int texture1;
-	glGenTextures(1, &texture1);
-	glBindTexture(GL_TEXTURE_2D, texture1);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	int width, height, nrChannels;
-	stbi_set_flip_vertically_on_load(true);
-	unsigned char* data = stbi_load("textures//jesse.jpg", &width, &height, &nrChannels, 0);
-	if (data)
-	{
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-		glGenerateMipmap(GL_TEXTURE_2D);
-	}	else
-	{
-		std::cout << "Failed to load texture" << std::endl;
+	// Generowanie figury
+	std::vector<Vertex> chairVertices;
+	std::vector<unsigned int> chairIndices;
+	if (!loadOBJ("models/simple_chair2.obj", chairVertices, chairIndices)) {
+		std::cerr << "Failed to load chair model" << std::endl;
+		return -1;
 	}
-	stbi_image_free(data);
 
-	// Domyślny typ prymitywu
-	GLenum primitiveType = GL_TRIANGLES;
+	std::vector<Vertex> tableVertices;
+	std::vector<unsigned int> tableIndices;
+	if (!loadOBJ("models/simple_table.obj", tableVertices, tableIndices)) {
+		std::cerr << "Failed to load table model" << std::endl;
+		return -1;
+	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * punkty_ * 8, vertices, GL_STATIC_DRAW);
 
 	// Utworzenie i skompilowanie shadera wierzchołków
 	GLuint vertexShader =
@@ -309,8 +346,12 @@ int main()
 	glUseProgram(shaderProgram);
 
 	// Stworzenie macierzy modelu
-	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::rotate(model, glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 chairModel = glm::mat4(1.0f);
+	chairModel = glm::translate(chairModel, glm::vec3(1.5f, 0.0f, 0.0f));
+	chairModel = glm::rotate(chairModel, glm::radians(-180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+	glm::mat4 tableModel = glm::mat4(1.0f);
+	tableModel = glm::translate(tableModel, glm::vec3(-2.5f, 0.0f, 0.0f));
 
 	// Stworzenie macierzy widoku
 	glm::mat4 view;
@@ -323,7 +364,8 @@ int main()
 
 	// Wysłanie do shadera macierzy modelu
 	GLint uniTrans = glGetUniformLocation(shaderProgram, "model");
-	glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(model));
+	//glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(chairModel));
+	//glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(tableModel));
 
 	// Wysłanie do shadera macierzy widoku
 	GLint uniView = glGetUniformLocation(shaderProgram, "view");
@@ -333,22 +375,88 @@ int main()
 	GLint uniProj = glGetUniformLocation(shaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
-	// Specifikacja formatu danych wierzchołkowych
-	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
-	glEnableVertexAttribArray(posAttrib);
-	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), 0);
-	GLint colAttrib = glGetAttribLocation(shaderProgram, "color");
-	glEnableVertexAttribArray(colAttrib);
-	glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+	// ##################################################### // 
 
-	// Wysłanie do shadera tekstury
-	GLint TexCoord = glGetAttribLocation(shaderProgram, "aTexCoord");
-	glEnableVertexAttribArray(TexCoord);	glVertexAttribPointer(TexCoord, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(6 *sizeof(GLfloat)));
+	// Utworzenie VAO, VBO i EBO dla krzesła 
+	GLuint vaoChair, vboChair, eboChair;
+	glGenVertexArrays(1, &vaoChair);
+	glGenBuffers(1, &vboChair);
+	glGenBuffers(1, &eboChair);
 
-	// Wysłanie do shadera wektorów normalnych
-	GLint NorAttrib = glGetAttribLocation(shaderProgram, "aNormal");
-	glEnableVertexAttribArray(NorAttrib);
-	glVertexAttribPointer(NorAttrib, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+	// Załaduj dane do VBO dla krzesła
+	glBindVertexArray(vaoChair);
+
+	// Załaduj dane wierzchołków do VBO
+	glBindBuffer(GL_ARRAY_BUFFER, vboChair);
+	glBufferData(GL_ARRAY_BUFFER, chairVertices.size() * sizeof(Vertex), &chairVertices[0], GL_STATIC_DRAW);
+
+	// Załaduj indeksy do EBO
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboChair);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, chairIndices.size() * sizeof(unsigned int), &chairIndices[0], GL_STATIC_DRAW);
+
+	// Wskaźniki do atrybutów wierzchołków dla krzesła
+	GLint posAttribChair = glGetAttribLocation(shaderProgram, "position");
+	glEnableVertexAttribArray(posAttribChair);
+	glVertexAttribPointer(posAttribChair, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+
+	// Wektory normalne
+	GLint norAttribChair = glGetAttribLocation(shaderProgram, "aNormal");
+	glEnableVertexAttribArray(norAttribChair);
+	glVertexAttribPointer(norAttribChair, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+	// Współrzędne tekstur
+	GLint texAttribChair = glGetAttribLocation(shaderProgram, "aTexCoord");
+	glEnableVertexAttribArray(texAttribChair);
+	glVertexAttribPointer(texAttribChair, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+
+	// Zakończ konfigurację VAO dla krzesła
+	glBindVertexArray(0);
+
+	// ##################################################### // 
+
+	// Utworzenie VAO, VBO i EBO dla stołu
+	GLuint vaoTable, vboTable, eboTable;
+	glGenVertexArrays(1, &vaoTable);
+	glGenBuffers(1, &vboTable);
+	glGenBuffers(1, &eboTable);
+
+	// Załaduj dane do VBO dla stołu
+	glBindVertexArray(vaoTable);
+
+	// Załaduj dane wierzchołków do VBO
+	glBindBuffer(GL_ARRAY_BUFFER, vboTable);
+	glBufferData(GL_ARRAY_BUFFER, tableVertices.size() * sizeof(Vertex), &tableVertices[0], GL_STATIC_DRAW);
+
+	// Załaduj indeksy do EBO
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboTable);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, tableIndices.size() * sizeof(unsigned int), &tableIndices[0], GL_STATIC_DRAW);
+
+	// Wskaźniki do atrybutów wierzchołków dla stołu
+		GLint posAttribTable = glGetAttribLocation(shaderProgram, "position");
+	glEnableVertexAttribArray(posAttribTable);
+	glVertexAttribPointer(posAttribTable, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+
+	GLint norAttribTable = glGetAttribLocation(shaderProgram, "aNormal");
+	glEnableVertexAttribArray(norAttribTable);
+	glVertexAttribPointer(norAttribTable, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+	GLint texAttribTable = glGetAttribLocation(shaderProgram, "aTexCoord");
+	glEnableVertexAttribArray(texAttribTable);
+	glVertexAttribPointer(texAttribTable, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+
+	// Zakończ konfigurację VAO dla stołu
+	glBindVertexArray(0);
+
+	// ##################################################### // 
+
+	/*
+	// Ładowanie tekstury
+	unsigned int texture1 = loadTexture("textures/wood.jpg");
+	if (texture1 == 0) {
+		std::cerr << "Nie udało się załadować tekstury!" << std::endl;
+		return -1;
+	}
+	*/
 
 	// Wysłanie do shadera pozycji źródła światła
 	glm::vec3 lightPos(1.2f, 1.5f, 2.0f);
@@ -548,9 +656,34 @@ int main()
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Narysowanie wybranego prymitywu na podstawie wybranej liczby wierzchołków
-		glDrawArrays(primitiveType, 0, punkty_);
+		// Narysowanie obiektu
+		/*
+		unsigned int texture1 = loadTexture("textures/wood.jpg");
+		if (texture1 == 0) {
+			std::cerr << "Nie udało się załadować tekstury!" << std::endl;
+			return -1;
+		}
+		*/
+		setModelColor(shaderProgram, 1.0f, 0.0f, 0.0f); // Czerwony kolor
 
+		// Rysowanie krzesła
+		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(chairModel));
+		glBindVertexArray(vaoChair);
+		glDrawElements(GL_TRIANGLES, chairIndices.size(), GL_UNSIGNED_INT, 0);
+
+		/*
+		unsigned int texture2 = loadTexture("textures/wood.jpg");
+		if (texture2 == 0) {
+			std::cerr << "Nie udało się załadować tekstury!" << std::endl;
+			return -1;
+		}
+		*/
+		setModelColor(shaderProgram, 0.0f, 1.0f, 0.0f); // Zielony kolor
+
+		// Rysowanie stołu
+		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(tableModel));
+		glBindVertexArray(vaoTable);
+		glDrawElements(GL_TRIANGLES, tableIndices.size(), GL_UNSIGNED_INT, 0);
 		
 		glUniform1i(lightingEnabledLocation, lightingEnabled);
 
@@ -561,8 +694,12 @@ int main()
 	glDeleteProgram(shaderProgram);
 	glDeleteShader(fragmentShader);
 	glDeleteShader(vertexShader);
-	glDeleteBuffers(1, &vbo);
-	glDeleteVertexArrays(1, &vao);
+
+	glDeleteBuffers(1, &vboChair);
+	glDeleteVertexArrays(1, &vaoChair);
+
+	glDeleteBuffers(1, &vboTable);
+	glDeleteVertexArrays(1, &vaoTable);
 
 	// Usunięcie dynamicznej tablicy
 	//delete[] vertices;
