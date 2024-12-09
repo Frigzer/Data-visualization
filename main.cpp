@@ -18,6 +18,7 @@
 #include <sstream>
 #include <vector>
 #include <string>
+#include <map>
 
 // Kody shaderów
 const GLchar* vertexSource = R"glsl(
@@ -212,6 +213,7 @@ unsigned int loadTexture(const std::string& texturePath) {
 	return textureID;
 }
 
+// Funkcja do nakładania koloru
 void setModelColor(GLuint shaderProgram, float r, float g, float b) {
 	// Znajdź lokalizację uniformu w shaderze
 	GLint colorLocation = glGetUniformLocation(shaderProgram, "objectColor");
@@ -282,6 +284,165 @@ bool loadOBJ(const std::string& path, std::vector<Vertex>& vertices, std::vector
 	return true;
 }
 
+// Funkcja do podziału modelu na podstawie współrzędnej y
+void splitModelByY(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices,
+	float ySplit, std::vector<Vertex>& upperVertices, std::vector<unsigned int>& upperIndices,
+	std::vector<Vertex>& lowerVertices, std::vector<unsigned int>& lowerIndices) {
+	auto interpolateVertex = [](const Vertex& v1, const Vertex& v2, float t) {
+		Vertex v;
+		v.position = v1.position + t * (v2.position - v1.position);
+		v.normal = glm::normalize(v1.normal + t * (v2.normal - v1.normal));
+		v.texCoord = v1.texCoord + t * (v2.texCoord - v1.texCoord);
+		return v;
+		};
+
+	for (size_t i = 0; i < indices.size(); i += 3) {
+		unsigned int idx0 = indices[i];
+		unsigned int idx1 = indices[i + 1];
+		unsigned int idx2 = indices[i + 2];
+
+		const Vertex& v0 = vertices[idx0];
+		const Vertex& v1 = vertices[idx1];
+		const Vertex& v2 = vertices[idx2];
+
+		bool above0 = v0.position.y >= ySplit;
+		bool above1 = v1.position.y >= ySplit;
+		bool above2 = v2.position.y >= ySplit;
+
+		std::vector<Vertex> upper, lower;
+
+		if (above0) upper.push_back(v0); else lower.push_back(v0);
+		if (above1) upper.push_back(v1); else lower.push_back(v1);
+		if (above2) upper.push_back(v2); else lower.push_back(v2);
+
+		if (upper.size() == 3) {
+			// Wszystkie wierzchołki powyżej
+			for (const Vertex& v : upper) {
+				upperVertices.push_back(v);
+				upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+			}
+		}
+		else if (lower.size() == 3) {
+			// Wszystkie wierzchołki poniżej
+			for (const Vertex& v : lower) {
+				lowerVertices.push_back(v);
+				lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+			}
+		}
+		else if (upper.size() == 2 && lower.size() == 1) {
+			// Trójkąt przecinający płaszczyznę (2 wierzchołki powyżej)
+			const Vertex* high1 = &upper[0];
+			const Vertex* high2 = &upper[1];
+			const Vertex* low = &lower[0];
+
+			float t1 = (ySplit - low->position.y) / (high1->position.y - low->position.y);
+			float t2 = (ySplit - low->position.y) / (high2->position.y - low->position.y);
+
+			Vertex vSplit1 = interpolateVertex(*low, *high1, t1);
+			Vertex vSplit2 = interpolateVertex(*low, *high2, t2);
+
+			// Dodaj do górnej części
+			upperVertices.push_back(*high1);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(*high2);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(vSplit1);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(vSplit1);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(vSplit2);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(*high2);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			// Dodaj do dolnej części
+			lowerVertices.push_back(*low);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(vSplit1);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(vSplit2);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+		}
+		else if (upper.size() == 1 && lower.size() == 2) {
+			// Trójkąt przecinający płaszczyznę (1 wierzchołek powyżej)
+			const Vertex* high = &upper[0];
+			const Vertex* low1 = &lower[0];
+			const Vertex* low2 = &lower[1];
+
+			float t1 = (ySplit - high->position.y) / (low1->position.y - high->position.y);
+			float t2 = (ySplit - high->position.y) / (low2->position.y - high->position.y);
+
+			Vertex vSplit1 = interpolateVertex(*high, *low1, t1);
+			Vertex vSplit2 = interpolateVertex(*high, *low2, t2);
+
+			// Dodaj do górnej części
+			upperVertices.push_back(*high);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(vSplit1);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			upperVertices.push_back(vSplit2);
+			upperIndices.push_back(static_cast<unsigned int>(upperVertices.size() - 1));
+
+			// Dodaj do dolnej części
+			lowerVertices.push_back(vSplit1);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(*low1);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(*low2);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(vSplit1);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(*low2);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+
+			lowerVertices.push_back(vSplit2);
+			lowerIndices.push_back(static_cast<unsigned int>(lowerVertices.size() - 1));
+		}
+	}
+}
+
+// Funkcja do tworzenia i konfigurowania VAO, VBO i EBO
+void setupBuffers(GLuint& vao, GLuint& vbo, GLuint& ebo, const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, GLuint shaderProgram) {
+	glGenVertexArrays(1, &vao);
+	glGenBuffers(1, &vbo);
+	glGenBuffers(1, &ebo);
+
+	glBindVertexArray(vao);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
+
+	GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
+	glEnableVertexAttribArray(posAttrib);
+	glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+
+	GLint norAttrib = glGetAttribLocation(shaderProgram, "aNormal");
+	glEnableVertexAttribArray(norAttrib);
+	glVertexAttribPointer(norAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+	GLint texAttrib = glGetAttribLocation(shaderProgram, "aTexCoord");
+	glEnableVertexAttribArray(texAttrib);
+	glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+
+	glBindVertexArray(0);
+}
+
 int main()
 {
 	srand(time(NULL));
@@ -305,7 +466,7 @@ int main()
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	// Generowanie figury
+	// Generowanie figur
 	std::vector<Vertex> chairVertices;
 	std::vector<unsigned int> chairIndices;
 	if (!loadOBJ("models/simple_chair2.obj", chairVertices, chairIndices)) {
@@ -320,6 +481,11 @@ int main()
 		return -1;
 	}
 
+	// Dwie nowe figury na podstawie krzesła
+	std::vector<Vertex> upperVertices, lowerVertices;
+	std::vector<unsigned int> upperIndices, lowerIndices;
+
+	splitModelByY(chairVertices, chairIndices, 3.8f, upperVertices, upperIndices, lowerVertices, lowerIndices);
 
 	// Utworzenie i skompilowanie shadera wierzchołków
 	GLuint vertexShader =
@@ -347,11 +513,23 @@ int main()
 
 	// Stworzenie macierzy modelu
 	glm::mat4 chairModel = glm::mat4(1.0f);
-	chairModel = glm::translate(chairModel, glm::vec3(1.5f, 0.0f, 0.0f));
-	chairModel = glm::rotate(chairModel, glm::radians(-180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	chairModel = glm::translate(chairModel, glm::vec3(-1.5f, 0.0f, 3.0f));
+	chairModel = glm::rotate(chairModel, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	chairModel = glm::scale(chairModel, glm::vec3(0.5f, 0.5f, 0.5f));
 
 	glm::mat4 tableModel = glm::mat4(1.0f);
-	tableModel = glm::translate(tableModel, glm::vec3(-2.5f, 0.0f, 0.0f));
+	tableModel = glm::translate(tableModel, glm::vec3(-1.5f, 0.0f, 0.0f));
+	tableModel = glm::scale(tableModel, glm::vec3(0.5f, 0.5f, 0.5f));
+
+	glm::mat4 upperChairModel = glm::mat4(1.0f);
+	upperChairModel = glm::translate(upperChairModel, glm::vec3(0.5f, 0.0f, 0.0f));
+	upperChairModel = glm::rotate(upperChairModel, glm::radians(-180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	upperChairModel = glm::scale(upperChairModel, glm::vec3(0.5f, 0.5f, 0.5f));
+
+	glm::mat4 lowerChairModel = glm::mat4(1.0f);
+	lowerChairModel = glm::translate(lowerChairModel, glm::vec3(0.5f, 0.0f, 0.0f));
+	lowerChairModel = glm::rotate(lowerChairModel, glm::radians(-180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	lowerChairModel = glm::scale(lowerChairModel, glm::vec3(0.5f, 0.5f, 0.5f));
 
 	// Stworzenie macierzy widoku
 	glm::mat4 view;
@@ -374,80 +552,22 @@ int main()
 	// Wysłanie do shadera macierzy projekcji
 	GLint uniProj = glGetUniformLocation(shaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
-
-	// ##################################################### // 
-
+	
 	// Utworzenie VAO, VBO i EBO dla krzesła 
 	GLuint vaoChair, vboChair, eboChair;
-	glGenVertexArrays(1, &vaoChair);
-	glGenBuffers(1, &vboChair);
-	glGenBuffers(1, &eboChair);
-
-	// Załaduj dane do VBO dla krzesła
-	glBindVertexArray(vaoChair);
-
-	// Załaduj dane wierzchołków do VBO
-	glBindBuffer(GL_ARRAY_BUFFER, vboChair);
-	glBufferData(GL_ARRAY_BUFFER, chairVertices.size() * sizeof(Vertex), &chairVertices[0], GL_STATIC_DRAW);
-
-	// Załaduj indeksy do EBO
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboChair);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, chairIndices.size() * sizeof(unsigned int), &chairIndices[0], GL_STATIC_DRAW);
-
-	// Wskaźniki do atrybutów wierzchołków dla krzesła
-	GLint posAttribChair = glGetAttribLocation(shaderProgram, "position");
-	glEnableVertexAttribArray(posAttribChair);
-	glVertexAttribPointer(posAttribChair, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
-
-	// Wektory normalne
-	GLint norAttribChair = glGetAttribLocation(shaderProgram, "aNormal");
-	glEnableVertexAttribArray(norAttribChair);
-	glVertexAttribPointer(norAttribChair, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-
-	// Współrzędne tekstur
-	GLint texAttribChair = glGetAttribLocation(shaderProgram, "aTexCoord");
-	glEnableVertexAttribArray(texAttribChair);
-	glVertexAttribPointer(texAttribChair, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
-
-	// Zakończ konfigurację VAO dla krzesła
-	glBindVertexArray(0);
-
-	// ##################################################### // 
-
+	setupBuffers(vaoChair, vboChair, eboChair, chairVertices, chairIndices, shaderProgram);
+	
 	// Utworzenie VAO, VBO i EBO dla stołu
 	GLuint vaoTable, vboTable, eboTable;
-	glGenVertexArrays(1, &vaoTable);
-	glGenBuffers(1, &vboTable);
-	glGenBuffers(1, &eboTable);
+	setupBuffers(vaoTable, vboTable, eboTable, tableVertices, tableIndices, shaderProgram);
 
-	// Załaduj dane do VBO dla stołu
-	glBindVertexArray(vaoTable);
+	// Utworzenie VAO, VBO i EBO dla górnej części krzesła
+	GLuint vaoUpperChair, vboUpperChair, eboUpperChair;
+	setupBuffers(vaoUpperChair, vboUpperChair, eboUpperChair, upperVertices, upperIndices, shaderProgram);
 
-	// Załaduj dane wierzchołków do VBO
-	glBindBuffer(GL_ARRAY_BUFFER, vboTable);
-	glBufferData(GL_ARRAY_BUFFER, tableVertices.size() * sizeof(Vertex), &tableVertices[0], GL_STATIC_DRAW);
-
-	// Załaduj indeksy do EBO
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eboTable);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, tableIndices.size() * sizeof(unsigned int), &tableIndices[0], GL_STATIC_DRAW);
-
-	// Wskaźniki do atrybutów wierzchołków dla stołu
-		GLint posAttribTable = glGetAttribLocation(shaderProgram, "position");
-	glEnableVertexAttribArray(posAttribTable);
-	glVertexAttribPointer(posAttribTable, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
-
-	GLint norAttribTable = glGetAttribLocation(shaderProgram, "aNormal");
-	glEnableVertexAttribArray(norAttribTable);
-	glVertexAttribPointer(norAttribTable, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-
-	GLint texAttribTable = glGetAttribLocation(shaderProgram, "aTexCoord");
-	glEnableVertexAttribArray(texAttribTable);
-	glVertexAttribPointer(texAttribTable, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
-
-	// Zakończ konfigurację VAO dla stołu
-	glBindVertexArray(0);
-
-	// ##################################################### // 
+	// Utworzenie VAO, VBO i EBO dla dolnej części krzesła
+	GLuint vaoLowerChair, vboLowerChair, eboLowerChair;
+	setupBuffers(vaoLowerChair, vboLowerChair, eboLowerChair, lowerVertices, lowerIndices, shaderProgram);
 
 	/*
 	// Ładowanie tekstury
@@ -459,12 +579,16 @@ int main()
 	*/
 
 	// Wysłanie do shadera pozycji źródła światła
-	glm::vec3 lightPos(1.2f, 1.5f, 2.0f);
+	glm::vec3 lightPos(1.2f, 2.5f, 2.0f);
 	GLint uniLightPos = glGetUniformLocation(shaderProgram, "lightPos");
 	glUniform3fv(uniLightPos, 1, &lightPos[0]);	bool lightingEnabled = true;  // Stan włączenia oświetlenia
 	float ambientStrength = 0.1f;
 	float lightIntensity = 1.0f;
 	bool changingAmbient = false;
+
+	// Zmienne kontrolujące rysowanie pociętego krzesła
+	bool drawLowerChair = false;
+	bool drawUpperChair = false;
 
 	// Wysłanie do shadera zmiennych odpowiedzialnych za oświetlenie
 	GLint lightingEnabledLocation = glGetUniformLocation(shaderProgram, "uLightingEnabled");
@@ -584,6 +708,12 @@ int main()
 					else
 						std::cout << "Ustawiono tryb: zmiana swiatla punktowego\n";
 				}
+				if (windowEvent.key.code == sf::Keyboard::Num7) {
+					drawLowerChair = !drawLowerChair;
+				}
+				if (windowEvent.key.code == sf::Keyboard::Num8) {
+					drawUpperChair = !drawUpperChair;
+				}
 				break;
 			
 			case sf::Event::MouseMoved:
@@ -639,7 +769,6 @@ int main()
 			yaw += cameraSpeed * 30;
 			//std::cout << "Obrot kamery: PRAWO\n";
 		}
-
 		
 		glm::vec3 front;
 		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -664,12 +793,39 @@ int main()
 			return -1;
 		}
 		*/
-		setModelColor(shaderProgram, 1.0f, 0.0f, 0.0f); // Czerwony kolor
-
+		
 		// Rysowanie krzesła
+		setModelColor(shaderProgram, 1.0f, 1.0f, 0.0f); // Żółty kolor
+		
 		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(chairModel));
 		glBindVertexArray(vaoChair);
 		glDrawElements(GL_TRIANGLES, chairIndices.size(), GL_UNSIGNED_INT, 0);
+
+		// Rysowanie stołu
+		setModelColor(shaderProgram, 0.0f, 1.0f, 0.0f); // Zielony kolor
+
+		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(tableModel));
+		glBindVertexArray(vaoTable);
+		glDrawElements(GL_TRIANGLES, tableIndices.size(), GL_UNSIGNED_INT, 0);
+		
+		// Rysowanie dolnej części krzesła
+		if (drawLowerChair) {
+			setModelColor(shaderProgram, 0.0f, 0.0f, 1.0f); // Niebieski kolor
+
+			
+			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(lowerChairModel));
+			glBindVertexArray(vaoLowerChair);
+			glDrawElements(GL_TRIANGLES, lowerIndices.size(), GL_UNSIGNED_INT, 0);
+		}
+
+		// Rysowanie górnej części krzesła
+		if (drawUpperChair) {
+			setModelColor(shaderProgram, 1.0f, 0.0f, 0.0f); // Czerwony kolor
+
+			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(upperChairModel));
+			glBindVertexArray(vaoUpperChair);
+			glDrawElements(GL_TRIANGLES, upperIndices.size(), GL_UNSIGNED_INT, 0);
+		}
 
 		/*
 		unsigned int texture2 = loadTexture("textures/wood.jpg");
@@ -678,12 +834,8 @@ int main()
 			return -1;
 		}
 		*/
-		setModelColor(shaderProgram, 0.0f, 1.0f, 0.0f); // Zielony kolor
 
-		// Rysowanie stołu
-		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(tableModel));
-		glBindVertexArray(vaoTable);
-		glDrawElements(GL_TRIANGLES, tableIndices.size(), GL_UNSIGNED_INT, 0);
+		
 		
 		glUniform1i(lightingEnabledLocation, lightingEnabled);
 
@@ -697,6 +849,12 @@ int main()
 
 	glDeleteBuffers(1, &vboChair);
 	glDeleteVertexArrays(1, &vaoChair);
+
+	glDeleteBuffers(1, &vboUpperChair);
+	glDeleteVertexArrays(1, &vaoUpperChair);
+
+	glDeleteBuffers(1, &vboLowerChair);
+	glDeleteVertexArrays(1, &vaoLowerChair);
 
 	glDeleteBuffers(1, &vboTable);
 	glDeleteVertexArrays(1, &vaoTable);
