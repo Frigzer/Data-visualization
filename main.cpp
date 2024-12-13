@@ -52,6 +52,7 @@ out vec4 outColor;
 uniform sampler2D texture1;
 
 uniform bool uLightingEnabled;  // Zmienna sterująca oświetleniem
+uniform bool useTexture; // Zmienna sterująca teksturą
 
 uniform vec3 lightPos;
 uniform vec3 viewPos;
@@ -79,13 +80,17 @@ void main()
 
     if (uLightingEnabled)
     {
-        // outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);	
-		outColor = (ambient + vec4(diffuse, 1.0)) * vec4(objectColor, 1.0);	
+		if (useTexture)
+			outColor = (ambient + vec4(diffuse, 1.0)) * texture(texture1, TexCoord);	
+		else	
+			outColor = (ambient + vec4(diffuse, 1.0)) * vec4(objectColor, 1.0);	
     }
     else
     {
-        // outColor = texture(texture1, TexCoord);
-		outColor = vec4(objectColor, 1.0);
+		if (useTexture)
+			outColor = texture(texture1, TexCoord);
+		else
+			outColor = vec4(objectColor, 1.0);
     }
 	
 	
@@ -557,9 +562,11 @@ int main()
 	GLuint vaoChair, vboChair, eboChair;
 	setupBuffers(vaoChair, vboChair, eboChair, chairVertices, chairIndices, shaderProgram);
 	
+	
 	// Utworzenie VAO, VBO i EBO dla stołu
 	GLuint vaoTable, vboTable, eboTable;
 	setupBuffers(vaoTable, vboTable, eboTable, tableVertices, tableIndices, shaderProgram);
+	
 
 	// Utworzenie VAO, VBO i EBO dla górnej części krzesła
 	GLuint vaoUpperChair, vboUpperChair, eboUpperChair;
@@ -569,46 +576,47 @@ int main()
 	GLuint vaoLowerChair, vboLowerChair, eboLowerChair;
 	setupBuffers(vaoLowerChair, vboLowerChair, eboLowerChair, lowerVertices, lowerIndices, shaderProgram);
 
-	/*
-	// Ładowanie tekstury
-	unsigned int texture1 = loadTexture("textures/wood.jpg");
-	if (texture1 == 0) {
-		std::cerr << "Nie udało się załadować tekstury!" << std::endl;
-		return -1;
-	}
-	*/
+	unsigned int chairTexture = loadTexture("textures/wood1.jpg");
+	unsigned int tableTexture = loadTexture("textures/star_wars.jpg");
+	unsigned int upperChairTexture = loadTexture("textures/wood3.jpg");
 
 	// Wysłanie do shadera pozycji źródła światła
-	glm::vec3 lightPos(1.2f, 2.5f, 2.0f);
+	glm::vec3 lightPos(-1.6f, 10.5f, -0.5f);
 	GLint uniLightPos = glGetUniformLocation(shaderProgram, "lightPos");
-	glUniform3fv(uniLightPos, 1, &lightPos[0]);	bool lightingEnabled = true;  // Stan włączenia oświetlenia
+	glUniform3fv(uniLightPos, 1, &lightPos[0]);
+	
+
+	bool lightingEnabled = true;  // Stan włączenia oświetlenia
 	float ambientStrength = 0.1f;
 	float lightIntensity = 1.0f;
 	bool changingAmbient = false;
+	bool useTexture = false;
 
 	// Zmienne kontrolujące rysowanie pociętego krzesła
-	bool drawLowerChair = false;
-	bool drawUpperChair = false;
+	bool drawLowerChair = true;
+	bool drawUpperChair = true;
 
 	// Wysłanie do shadera zmiennych odpowiedzialnych za oświetlenie
 	GLint lightingEnabledLocation = glGetUniformLocation(shaderProgram, "uLightingEnabled");
 	GLint ambientStrengthLocation = glGetUniformLocation(shaderProgram, "ambientStrength");
 	GLint lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
+	GLint useTextureLocation = glGetUniformLocation(shaderProgram, "useTexture");
 
 	glUniform1i(lightingEnabledLocation, lightingEnabled);
 	glUniform1f(ambientStrengthLocation, ambientStrength);
 	glUniform1f(lightIntensityLocation, lightIntensity);
+	glUniform1f(useTextureLocation, useTexture);
 	
 
 	// Rozpoczęcie pętli zdarzeń
 	bool running = true;
 
-	glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+	glm::vec3 cameraPos = glm::vec3(4.0f, 5.0f, 8.0f);
 	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 	// Kąty podrzebne do kontroli nachylenia
-	double yaw = -90.0, pitch = 0.0;
+	double yaw = -140.0, pitch = -30.0;
 
 	// Czułość myszy
 	float sensitivity = 0.05f;
@@ -699,7 +707,7 @@ int main()
 					lightPos = cameraPos;  // Ustawienie źródła światła na pozycję kamery
 					uniLightPos = glGetUniformLocation(shaderProgram, "lightPos");
 					glUniform3fv(uniLightPos, 1, &lightPos[0]);  // Wyślij do shaderów
-					std::cout << "Ustawiono nowa pozycje zrodla swiatla\n";
+					std::cout << "Ustawiono nowa pozycje zrodla swiatla na: " << cameraPos.x << " " << cameraPos.y << " " << cameraPos.z << "\n";
 				}
 				if (windowEvent.key.code == sf::Keyboard::Num6) {
 					changingAmbient = !changingAmbient;
@@ -785,58 +793,76 @@ int main()
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Narysowanie obiektu
-		/*
-		unsigned int texture1 = loadTexture("textures/wood.jpg");
-		if (texture1 == 0) {
-			std::cerr << "Nie udało się załadować tekstury!" << std::endl;
-			return -1;
-		}
-		*/
 		
-		// Rysowanie krzesła
+		// Rysowanie krzesła	
 		setModelColor(shaderProgram, 1.0f, 1.0f, 0.0f); // Żółty kolor
 		
+		// Ładowanie tekstury
+		if (chairTexture != 0) {
+			useTexture = true;
+			//glActiveTexture(chairTexture);
+			glBindTexture(GL_TEXTURE_2D, chairTexture);
+		}
+
+		glUniform1f(useTextureLocation, useTexture);
 		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(chairModel));
 		glBindVertexArray(vaoChair);
 		glDrawElements(GL_TRIANGLES, chairIndices.size(), GL_UNSIGNED_INT, 0);
+		useTexture = false;
 
 		// Rysowanie stołu
 		setModelColor(shaderProgram, 0.0f, 1.0f, 0.0f); // Zielony kolor
+		
+		// Ładowanie tekstury
+		if (tableTexture != 0) {
+			useTexture = true;
+			glActiveTexture(tableTexture);
+			glBindTexture(GL_TEXTURE_2D, tableTexture);
+		}
 
+		glUniform1f(useTextureLocation, useTexture);
 		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(tableModel));
 		glBindVertexArray(vaoTable);
 		glDrawElements(GL_TRIANGLES, tableIndices.size(), GL_UNSIGNED_INT, 0);
+		useTexture = false;
 		
 		// Rysowanie dolnej części krzesła
 		if (drawLowerChair) {
 			setModelColor(shaderProgram, 0.0f, 0.0f, 1.0f); // Niebieski kolor
 
-			
+			// Ładowanie tekstury
+			if (upperChairTexture != 0) {
+				useTexture = true;
+				glActiveTexture(upperChairTexture);
+				glBindTexture(GL_TEXTURE_2D, upperChairTexture);
+			}
+
+			glUniform1f(useTextureLocation, useTexture);
 			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(lowerChairModel));
 			glBindVertexArray(vaoLowerChair);
 			glDrawElements(GL_TRIANGLES, lowerIndices.size(), GL_UNSIGNED_INT, 0);
+			useTexture = false;
 		}
 
 		// Rysowanie górnej części krzesła
 		if (drawUpperChair) {
 			setModelColor(shaderProgram, 1.0f, 0.0f, 0.0f); // Czerwony kolor
 
+			// Ładowanie tekstury
+			if (upperChairTexture != 0) {
+				useTexture = true;
+				glActiveTexture(upperChairTexture);
+				glBindTexture(GL_TEXTURE_2D, upperChairTexture);
+			}
+
+			glUniform1f(useTextureLocation, useTexture);
 			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(upperChairModel));
 			glBindVertexArray(vaoUpperChair);
 			glDrawElements(GL_TRIANGLES, upperIndices.size(), GL_UNSIGNED_INT, 0);
+			useTexture = false;
 		}
 
-		/*
-		unsigned int texture2 = loadTexture("textures/wood.jpg");
-		if (texture2 == 0) {
-			std::cerr << "Nie udało się załadować tekstury!" << std::endl;
-			return -1;
-		}
-		*/
 
-		
-		
 		glUniform1i(lightingEnabledLocation, lightingEnabled);
 
 		// Wymiana buforów tylni/przedni
