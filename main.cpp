@@ -92,9 +92,7 @@ void main()
 		else
 			outColor = vec4(objectColor, 1.0);
     }
-	
-	
-	//outColor = vec4(objectColor, 1.0); // Ustaw kolor z uniformu
+
 }
 )glsl";
 
@@ -109,72 +107,6 @@ void checkShaderCompilation(GLuint shader, const char* shaderName) {
 	}
 	else {
 		std::cout << "Compilation " << shaderName << " OK" << std::endl;
-	}
-}
-
-// Funkcja do generowania wierzchołków wielokąta
-void generatePolygonVerticles(GLfloat* vertices, int numVertices, float radius) {
-	for (int i = 0; i < numVertices; i++) {
-		float angle = 2.0f * 3.14159265358979323846 * i / numVertices;
-		vertices[i * 6] = radius * cos(angle);  // X
-		vertices[i * 6 + 1] = radius * sin(angle);  // Y
-		vertices[i * 6 + 2] = 0.0f;  // Z
-
-		vertices[i * 6 + 3] = (float)rand() / RAND_MAX;  // R
-		vertices[i * 6 + 4] = (float)rand() / RAND_MAX;  // G
-		vertices[i * 6 + 5] = (float)rand() / RAND_MAX;  // B
-	}
-}
-
-// Funkcja do aktualizcji punktów
-GLfloat* update(GLfloat* vertices, int numVertices, GLuint vbo) {
-	delete[] vertices;
-	vertices = new GLfloat[numVertices * 6];
-
-	generatePolygonVerticles(vertices, numVertices, 0.5f);
-
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * numVertices * 8, vertices, GL_DYNAMIC_DRAW);
-
-	return vertices;
-}
-
-// Funkcja do ustawienia prymitywu
-GLenum setPrimitive(sf::Event mouseEvent) {
-	switch (mouseEvent.key.code)
-	{
-	case sf::Keyboard::Num1:
-		std::cout << "Zmieniono tryb na: " << "GL_POINTS" << std::endl;
-		return GL_POINTS;
-	case sf::Keyboard::Num2:
-		std::cout << "Zmieniono tryb na: " << "GL_LINES" << std::endl;
-		return GL_LINES;
-	case sf::Keyboard::Num3:
-		std::cout << "Zmieniono tryb na: " << "GL_LINE_LOOP" << std::endl;
-		return GL_LINE_LOOP;
-	case sf::Keyboard::Num4:
-		std::cout << "Zmieniono tryb na: " << "GL_LINE_STRIP" << std::endl;
-		return GL_LINE_STRIP;
-	case sf::Keyboard::Num5:
-		std::cout << "Zmieniono tryb na: " << "GL_TRIANGLES" << std::endl;
-		return GL_TRIANGLES;
-	case sf::Keyboard::Num6:
-		std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_STRIP" << std::endl;
-		return GL_TRIANGLE_STRIP;
-	case sf::Keyboard::Num7:
-		std::cout << "Zmieniono tryb na: " << "GL_TRIANGLE_FAN" << std::endl;
-		return GL_TRIANGLE_FAN;
-	case sf::Keyboard::Num8:
-		std::cout << "Zmieniono tryb na: " << "GL_QUADS" << std::endl;
-		return GL_QUADS;
-	case sf::Keyboard::Num9:
-		std::cout << "Zmieniono tryb na: " << "GL_QUAD_STRIP" << std::endl;
-		return GL_QUAD_STRIP;
-	case sf::Keyboard::Num0:
-		std::cout << "Zmieniono tryb na: " << "GL_POLYGON" << std::endl;
-		return GL_POLYGON;
-	default:
-		break;
 	}
 }
 
@@ -590,6 +522,8 @@ int main()
 	float ambientStrength = 0.1f;
 	float lightIntensity = 1.0f;
 	bool changingAmbient = false;
+
+
 	bool useTexture = false;
 
 	// Zmienne kontrolujące rysowanie pociętego krzesła
@@ -616,7 +550,7 @@ int main()
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 	// Kąty podrzebne do kontroli nachylenia
-	double yaw = -140.0, pitch = -30.0;
+	double yaw = -110.0, pitch = -30.0;
 
 	// Czułość myszy
 	float sensitivity = 0.05f;
@@ -800,7 +734,7 @@ int main()
 		// Ładowanie tekstury
 		if (chairTexture != 0) {
 			useTexture = true;
-			//glActiveTexture(chairTexture);
+			glActiveTexture(chairTexture);
 			glBindTexture(GL_TEXTURE_2D, chairTexture);
 		}
 
